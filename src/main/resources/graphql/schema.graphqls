@@ -1,6 +1,7 @@
 type Query {
-    fetchApi(apiName: String!): DynamicResponse
-    listApis: [ApiInfo]
+    fetchApi(apiName: String!):    DynamicResponse
+    fetchJoined(apiName: String!): JoinedResponse   # ← new
+    listApis:                      [ApiInfo]
 }
 
 type DynamicResponse {
@@ -25,4 +26,20 @@ type ApiInfo {
     description: String
     sourceTable: String
     columnCount: Int
+}
+
+type JoinedResponse {
+    apiName:   String
+    totalRows: Int
+    rows:      [JoinedRow]
+}
+
+type JoinedRow {
+    fields:  [Field]
+    related: [RelatedEntity]
+}
+
+type RelatedEntity {
+    entity: String
+    fields: [Field]
 }

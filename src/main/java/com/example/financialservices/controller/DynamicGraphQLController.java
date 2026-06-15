@@ -27,4 +27,9 @@ public class DynamicGraphQLController {
     public List<ApiInfo> listApis() {
         return service.listApis();
     }
+
+    @QueryMapping
+    public JoinedResponse fetchJoined(@Argument String apiName) {
+        return service.executeJoined(apiName);
+    }
 }

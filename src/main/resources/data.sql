@@ -173,3 +173,13 @@ INSERT INTO column_mapping (api_id, column_name, display_name, data_type, is_nul
                                                                                                           (3, 'target_price',       'targetPrice',      'NUMBER',  true,  8),
                                                                                                           (3, 'notes',              'notes',            'STRING',  true,  9),
                                                                                                           (3, 'is_primary_coverage','isPrimaryCoverage','BOOLEAN', true,  10);
+
+
+
+-- coverage(worker_id) → worker(id)
+INSERT INTO api_join_config (parent_api_id, related_api_id, foreign_key_col, related_key_col)
+VALUES (3, 1, 'worker_id', 'id');
+
+-- coverage(company_id) → company(id)
+INSERT INTO api_join_config (parent_api_id, related_api_id, foreign_key_col, related_key_col)
+VALUES (3, 2, 'company_id', 'id');

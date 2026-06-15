@@ -1,17 +1,17 @@
 package com.example.financialservices.service;
 
 import com.example.financialservices.exception.ApiNotFoundException;
+import com.example.financialservices.model.ApiJoinConfig;
 import com.example.financialservices.model.ApiMetadata;
 import com.example.financialservices.model.ColumnMapping;
-import com.example.financialservices.model.graphql.ApiInfo;
-import com.example.financialservices.model.graphql.DynamicResponse;
-import com.example.financialservices.model.graphql.DynamicRow;
-import com.example.financialservices.model.graphql.Field;
+import com.example.financialservices.model.graphql.*;
+import com.example.financialservices.repository.ApiJoinConfigRepository;
 import com.example.financialservices.repository.ApiMetadataRepository;
 import com.example.financialservices.repository.ColumnMappingRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,13 +22,16 @@ public class DynamicApiService {
     private final ApiMetadataRepository metaRepo;
     private final ColumnMappingRepository colRepo;
     private final JdbcTemplate jdbc;  // ← raw SQL executor, no POJO needed
+    private final ApiJoinConfigRepository joinRepo;
 
     public DynamicApiService(ApiMetadataRepository metaRepo,
                              ColumnMappingRepository colRepo,
-                             JdbcTemplate jdbc) {
-        this.metaRepo = metaRepo;
-        this.colRepo  = colRepo;
-        this.jdbc     = jdbc;
+                             JdbcTemplate jdbc,
+                             ApiJoinConfigRepository joinRepo) {
+        this.metaRepo  = metaRepo;
+        this.colRepo   = colRepo;
+        this.jdbc      = jdbc;
+        this.joinRepo  = joinRepo;
     }
 
     public List<Map<String, Object>> execute(String apiName) {
@@ -112,5 +115,85 @@ public class DynamicApiService {
                         colRepo.countByApiId(meta.getId())
                 ))
                 .toList();
+    }
+
+    public JoinedResponse executeJoined(String apiName) {
+
+        // 1. Load parent metadata (e.g. coverage)
+        ApiMetadata parentMeta = metaRepo
+                .findByApiNameAndIsActive(apiName, true)
+                .orElseThrow(() -> new ApiNotFoundException("No active API: " + apiName));
+
+        List<ColumnMapping> parentCols = colRepo
+                .findByApiIdAndIsVisibleOrderByDisplayOrder(parentMeta.getId(), true);
+
+        List<Map<String, Object>> parentRows = jdbc.queryForList(parentMeta.getSqlQuery());
+
+        // 2. Load join config for this API
+        List<ApiJoinConfig> joins = joinRepo.findByParentApiId(parentMeta.getId());
+
+        // 3. For each join, load the related API metadata once
+        Map<Long, ApiMetadata> relatedMetaMap = new HashMap<>();
+        Map<Long, List<ColumnMapping>> relatedColsMap = new HashMap<>();
+
+        for (ApiJoinConfig join : joins) {
+            Long relId = join.getRelatedApiId();
+            if (!relatedMetaMap.containsKey(relId)) {
+                ApiMetadata relMeta = metaRepo.findById(relId)
+                        .orElseThrow(() -> new ApiNotFoundException("Related API not found: " + relId));
+                relatedMetaMap.put(relId, relMeta);
+                relatedColsMap.put(relId, colRepo
+                        .findByApiIdAndIsVisibleOrderByDisplayOrder(relId, true));
+            }
+        }
+
+        // 4. Build each joined row
+        List<JoinedRow> joinedRows = parentRows.stream().map(parentRow -> {
+
+            // Parent's own fields
+            List<Field> parentFields = parentCols.stream()
+                    .map(col -> {
+                        Object val = parentRow.get(col.getColumnName().toUpperCase());
+                        return new Field(col.getDisplayName(), val != null ? val.toString() : null);
+                    })
+                    .toList();
+
+            // For each join config, fetch the related row and shape it
+            List<RelatedEntity> related = joins.stream().map(join -> {
+
+                ApiMetadata relMeta  = relatedMetaMap.get(join.getRelatedApiId());
+                List<ColumnMapping> relCols = relatedColsMap.get(join.getRelatedApiId());
+
+                // Get FK value from parent row e.g. worker_id = 9
+                Object fkValue = parentRow.get(join.getForeignKeyCol().toUpperCase());
+
+                if (fkValue == null) return new RelatedEntity(relMeta.getApiName(), List.of());
+
+                // Fetch related row by PK
+                String relatedSql = relMeta.getSqlQuery()
+                        + " WHERE " + join.getRelatedKeyCol() + " = " + fkValue;
+
+                List<Map<String, Object>> relatedRows = jdbc.queryForList(relatedSql);
+
+                if (relatedRows.isEmpty()) return new RelatedEntity(relMeta.getApiName(), List.of());
+
+                Map<String, Object> relatedRow = relatedRows.get(0);
+
+                List<Field> relatedFields = relCols.stream()
+                        .map(col -> {
+                            Object val = relatedRow.get(col.getColumnName().toUpperCase());
+                            return new Field(col.getDisplayName(), val != null ? val.toString() : null);
+                        })
+                        .toList();
+
+                return new RelatedEntity(relMeta.getApiName(), relatedFields);
+
+            }).toList();
+
+            return new JoinedRow(parentFields, related);
+
+        }).toList();
+
+        return new JoinedResponse(parentMeta.getApiName(), joinedRows);
     }
 }

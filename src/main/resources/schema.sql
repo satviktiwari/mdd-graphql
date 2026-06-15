@@ -41,3 +41,10 @@ CREATE TABLE IF NOT EXISTS coverage_data (
     );
 
 
+CREATE TABLE IF NOT EXISTS api_join_config (
+                                               id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+                                               parent_api_id    BIGINT      NOT NULL,  -- coverage's api_metadata id
+                                               related_api_id   BIGINT      NOT NULL,  -- worker's or company's api_metadata id
+                                               foreign_key_col  VARCHAR(100) NOT NULL, -- column in parent: "worker_id"
+    related_key_col  VARCHAR(100) NOT NULL  -- PK in related:   "id"
+    );
