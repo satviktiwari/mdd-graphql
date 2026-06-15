@@ -92,3 +92,84 @@ INSERT INTO coverage_data (id, worker_id, company_id, coverage_type, start_date,
 (23, 22, 23, 'EQUITY',       '2022-06-07', null,         'BUY',          1650.00, 'SBI Life VNB growth strong; embedded value re-rating likely.',     true),
 (24, 25, 18, 'FIXED_INCOME', '2020-10-01', null,         'OVERWEIGHT',   null,    'PowerGrid bonds sovereign-like; regulated returns predictable.',    true),
 (25, 14, 21, 'EQUITY',       '2021-08-30', '2024-01-31', 'SELL',         4500.00, 'Coverage closed after client offboarding. Final rating: SELL.',   true);
+
+-- ── API METADATA ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS api_metadata (
+                                            id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+                                            api_name      VARCHAR(50)  NOT NULL UNIQUE,  -- matches /api/<api_name>
+    source_table  VARCHAR(100) NOT NULL,          -- actual DB table
+    sql_query     TEXT         NOT NULL,          -- SQL to execute
+    description   VARCHAR(255),
+    is_active     BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+-- ── COLUMN MAPPING ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS column_mapping (
+                                              id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+                                              api_id          BIGINT       NOT NULL REFERENCES api_metadata(id),
+    column_name     VARCHAR(100) NOT NULL,   -- actual DB column name
+    display_name    VARCHAR(100) NOT NULL,   -- key in JSON response
+    data_type       VARCHAR(30)  NOT NULL,   -- STRING, NUMBER, BOOLEAN, DATE
+    is_nullable     BOOLEAN DEFAULT TRUE,
+    display_order   INT     DEFAULT 0,       -- order in response
+    is_visible      BOOLEAN DEFAULT TRUE     -- false = exclude from response
+    );
+
+-- ── SEED: api_metadata ───────────────────────────────────────────
+INSERT INTO api_metadata (id, api_name, source_table, sql_query, description) VALUES
+                                                                                  (1, 'worker',
+                                                                                   'worker_data',
+                                                                                   'SELECT id, first_name, last_name, email, phone, department, designation, hire_date, is_active FROM worker_data',
+                                                                                   'Returns all internal workers/analysts'),
+
+                                                                                  (2, 'company',
+                                                                                   'company_data',
+                                                                                   'SELECT id, company_name, ticker, sector, industry, headquarters, country, market_cap_crore, annual_revenue_crore, employee_count, listed_exchange, onboarded_date, status FROM company_data',
+                                                                                   'Returns all client companies'),
+
+                                                                                  (3, 'coverage',
+                                                                                   'coverage_data',
+                                                                                   'SELECT id, worker_id, company_id, coverage_type, start_date, end_date, rating, target_price, notes, is_primary_coverage FROM coverage_data',
+                                                                                   'Returns all coverage records');
+
+-- ── SEED: column_mapping for worker (api_id = 1) ─────────────────
+INSERT INTO column_mapping (api_id, column_name, display_name, data_type, is_nullable, display_order) VALUES
+                                                                                                          (1, 'id',          'id',          'NUMBER',  false, 1),
+                                                                                                          (1, 'first_name',  'firstName',   'STRING',  false, 2),
+                                                                                                          (1, 'last_name',   'lastName',    'STRING',  false, 3),
+                                                                                                          (1, 'email',       'email',       'STRING',  false, 4),
+                                                                                                          (1, 'phone',       'phone',       'STRING',  true,  5),
+                                                                                                          (1, 'department',  'department',  'STRING',  false, 6),
+                                                                                                          (1, 'designation', 'designation', 'STRING',  false, 7),
+                                                                                                          (1, 'hire_date',   'hireDate',    'DATE',    true,  8),
+                                                                                                          (1, 'is_active',   'isActive',    'BOOLEAN', true,  9);
+
+-- ── SEED: column_mapping for company (api_id = 2) ────────────────
+INSERT INTO column_mapping (api_id, column_name, display_name, data_type, is_nullable, display_order) VALUES
+                                                                                                          (2, 'id',                   'id',                 'NUMBER',  false, 1),
+                                                                                                          (2, 'company_name',         'companyName',        'STRING',  false, 2),
+                                                                                                          (2, 'ticker',               'ticker',             'STRING',  false, 3),
+                                                                                                          (2, 'sector',               'sector',             'STRING',  false, 4),
+                                                                                                          (2, 'industry',             'industry',           'STRING',  false, 5),
+                                                                                                          (2, 'headquarters',         'headquarters',       'STRING',  true,  6),
+                                                                                                          (2, 'country',              'country',            'STRING',  true,  7),
+                                                                                                          (2, 'market_cap_crore',     'marketCapCrore',     'NUMBER',  true,  8),
+                                                                                                          (2, 'annual_revenue_crore', 'annualRevenueCrore', 'NUMBER',  true,  9),
+                                                                                                          (2, 'employee_count',       'employeeCount',      'NUMBER',  true,  10),
+                                                                                                          (2, 'listed_exchange',      'listedExchange',     'STRING',  true,  11),
+                                                                                                          (2, 'onboarded_date',       'onboardedDate',      'DATE',    true,  12),
+                                                                                                          (2, 'status',               'status',             'STRING',  true,  13);
+
+-- ── SEED: column_mapping for coverage (api_id = 3) ───────────────
+INSERT INTO column_mapping (api_id, column_name, display_name, data_type, is_nullable, display_order) VALUES
+                                                                                                          (3, 'id',                 'id',               'NUMBER',  false, 1),
+                                                                                                          (3, 'worker_id',          'workerId',         'NUMBER',  false, 2),
+                                                                                                          (3, 'company_id',         'companyId',        'NUMBER',  false, 3),
+                                                                                                          (3, 'coverage_type',      'coverageType',     'STRING',  false, 4),
+                                                                                                          (3, 'start_date',         'startDate',        'DATE',    false, 5),
+                                                                                                          (3, 'end_date',           'endDate',          'DATE',    true,  6),
+                                                                                                          (3, 'rating',             'rating',           'STRING',  true,  7),
+                                                                                                          (3, 'target_price',       'targetPrice',      'NUMBER',  true,  8),
+                                                                                                          (3, 'notes',              'notes',            'STRING',  true,  9),
+                                                                                                          (3, 'is_primary_coverage','isPrimaryCoverage','BOOLEAN', true,  10);

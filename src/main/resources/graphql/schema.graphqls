@@ -1,62 +1,28 @@
-# This is your "menu" — defines all types and what can be queried
-
 type Query {
-    # Entry points — what consumers can ask for
-    allWorkers: [Worker]
-    workerById(id: ID!): Worker
-
-    allCompanies: [Company]
-    companyById(id: ID!): Company
-    companyByTicker(ticker: String!): Company
-
-    allCoverages: [Coverage]
-    coveragesByWorker(workerId: ID!): [Coverage]
-    coveragesByCompany(companyId: ID!): [Coverage]
-    activeCoverages: [Coverage]
+    fetchApi(apiName: String!): DynamicResponse
+    listApis: [ApiInfo]
 }
 
-# Maps to your WorkerData entity
-type Worker {
-    id: ID!
-    firstName: String
-    lastName: String
-    email: String
-    phone: String
-    department: String
-    designation: String
-    hireDate: String
-    isActive: Boolean
-    coverages: [Coverage]   # ← this is the magic — nested traversal
+type DynamicResponse {
+    apiName:     String
+    description: String
+    totalRows:   Int
+    rows:        [DynamicRow]
 }
 
-# Maps to your CompanyData entity
-type Company {
-    id: ID!
-    companyName: String
-    ticker: String
-    sector: String
-    industry: String
-    headquarters: String
-    country: String
-    marketCapCrore: Float
-    annualRevenueCrore: Float
-    employeeCount: Int
-    listedExchange: String
-    onboardedDate: String
-    status: String
-    coverages: [Coverage]   # ← ask company → get its coverages in same call
+type DynamicRow {
+    fields: [Field]
 }
 
-# Maps to your CoverageData entity
-type Coverage {
-    id: ID!
-    coverageType: String
-    startDate: String
-    endDate: String
-    rating: String
-    targetPrice: Float
-    notes: String
-    isPrimaryCoverage: Boolean
-    worker: Worker          # ← traverse to worker from coverage
-    company: Company        # ← traverse to company from coverage
+type Field {
+    key:   String
+    value: String
+}
+
+# Exposes what APIs are available — useful for consumers to discover
+type ApiInfo {
+    apiName:     String
+    description: String
+    sourceTable: String
+    columnCount: Int
 }
